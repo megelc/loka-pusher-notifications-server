@@ -1,0 +1,15 @@
+{
+  "name": "loka-pusher-notifications-server",
+  "version": "0.0.1",
+  "description": "Loka Pusher Notifications Server",
+  "main": "loka-pusher-notifications-server.js",
+  "dependencies": {
+    "@pusher/push-notifications-server": "^1.0.0",
+    "websocket": "^1.0.26"
+  },
+  "scripts": {
+    "start": "node loka-pusher-notifications-server.js"
+  },
+  "author": "Mikkel Christensen",
+  "license": "MIT"
+}
