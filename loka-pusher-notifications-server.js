@@ -3,25 +3,23 @@
 // Allow untrusted certs for TLS!
 process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = "0";
 
-var https = require("https");
-var WebSocketClient = require("websocket").client;
-var client = new WebSocketClient();
-var PushNotifications = require('@pusher/push-notifications-server');
+const config = require('./config.json');
+const https = require("https");
+const WebSocketClient = require("websocket").client;
+const client = new WebSocketClient();
+const PushNotifications = require('@pusher/push-notifications-server');
 
 // Loka Authentication Token
-var token = process.env.LOKA_AUTH_TOKEN;
-
-// Loka Device ID
-var deviceId = process.env.LOKA_DEVICE_ID;
+const token = process.env.LOKA_AUTH_TOKEN;
 
 // Pusher instance ID
-var pusherInstanceId = process.env.PUSHER_INSTANCE_ID;
+const pusherInstanceId = process.env.PUSHER_INSTANCE_ID;
 
 // Pusher secret Key
-var pusherSecretKey = process.env.PUSHER_SECRET_KEY;
+const pusherSecretKey = process.env.PUSHER_SECRET_KEY;
 
 // Create log function
-var logger = exports;
+const logger = exports;
 logger.debugLevel = 'warn';
 logger.log = function(level, message) {
     var levels = ['error', 'warn', 'info'];
@@ -42,7 +40,7 @@ function tryParseJson(str) {
     }
 }
 
-logger.log('info', "Loka Auth Token: " + token + " Loka Device ID: " + deviceId + " Pusher instance ID:" + pusherInstanceId + " Pusher secret Key:" + pusherSecretKey);
+logger.log('info', "Loka Auth Token: " + token + " Pusher instance ID: " + pusherInstanceId + " Pusher secret Key: " + pusherSecretKey);
 
 // Create a Pusher notification object
 var pushNotifications = new PushNotifications({
@@ -50,44 +48,75 @@ var pushNotifications = new PushNotifications({
     secretKey: pusherSecretKey
 });
 
-function sendPushNotification(message, timestamp) {
-    pushNotifications.publish(['hello'], {
+function sendPushNotification(deviceId, message, timestamp) {
+    pushNotifications.publish([deviceId], {
         fcm: {
             data: {
                 myMessagePayload: message + ': (' + timestamp.toString() + ')\n',
-                isMyPushNotification: true
+                myDeviceId: deviceId
             }
         }
     }).then((publishResponse) => {
-        logger.log('info', 'Just published: ' + publishResponse.publishId);
+        logger.log('info', 'Just published: ' + publishResponse.publishId + ' to interest: ' + deviceId);
     }).catch((error) => {
         logger.log('error', "Error: " + error.toString());
     });
 }
 
-//Subscribe device
-var optionsget = {
-    host: "core.loka.systems",
-    port: 443,
-    path: "/subscribe_terminal/" + deviceId,
-    method: "GET",
-    headers: {
-        Authorization: "Bearer " + token
-    }
-};
+function subscribeDevice(deviceId, token) {
+    //Subscribe device
+    var optionsget = {
+        host: "core.loka.systems",
+        port: 443,
+        path: "/subscribe_terminal/" + deviceId,
+        method: "GET",
+        headers: {
+            Authorization: "Bearer " + token
+        }
+    };
 
-// Do the HTTP GET request
-var reqGet = https.request(optionsget, function(res) {
-    logger.log('info', "HTTP GET request statusCode: " + res.statusCode);
-    res.on("data", function(d) {
-        logger.log('info', "HTTP GET data: " + d);
+    // Do the HTTP GET request
+    var reqGet = https.request(optionsget, function(res) {
+        logger.log('info', "HTTP GET request statusCode: " + res.statusCode);
+        res.on("data", function(d) {
+            logger.log('info', "HTTP GET data: " + d);
+        });
     });
-});
 
-reqGet.end();
-reqGet.on("error", function(e) {
-    logger.log('error', "HTTP GET Error: " + e.toString());
-});
+    reqGet.end();
+    reqGet.on("error", function(e) {
+        logger.log('error', "HTTP GET Error: " + e.toString());
+    });
+}
+
+function unsubscribeDevice(deviceId, token) {
+    //Unsubscribe device
+    var optionsget = {
+        host: "core.loka.systems",
+        port: 443,
+        path: "/unsubscribe_terminal/" + deviceId,
+        method: "GET",
+        headers: {
+            Authorization: "Bearer " + token
+        }
+    };
+
+    // Do the HTTP GET request
+    var reqGet = https.request(optionsget, function(res) {
+        logger.log('info', "HTTP GET request statusCode: " + res.statusCode);
+    });
+    reqGet.end();
+    reqGet.on("error", function(e) {
+        logger.log('error', "HTTP GET Error: " + e.toString());
+    });
+}
+
+
+logger.log('info', "Subscribing devices...");
+for (var deviceId in config.devices) {
+    logger.log('info', 'Subscribing: ' + config.devices[deviceId]);
+    subscribeDevice(config.devices[deviceId], token);
+}
 
 client.on("connectFailed", function(error) {
     logger.log('error', "Connect Error: " + error.toString());
@@ -98,7 +127,7 @@ client.on("connect", function(connection) {
 
     // Send a push notification that the server has started
     var d = new Date();
-    sendPushNotification('Server started [' + deviceId + ']', d);
+    sendPushNotification('Server', 'Server started', d);
 
     connection.on("error", function(error) {
         logger.log('error', "Connection Error: " + error.toString());
@@ -123,7 +152,7 @@ client.on("connect", function(connection) {
                 payload.gpio.value == true) {
 
                 var d = new Date(payload.timestamp * 1000);
-                sendPushNotification('Movement detected', d);
+                sendPushNotification(String(payload.src), 'Movement detected', d);
             }
         }
     });
@@ -140,12 +169,9 @@ client.connect(
 
 //Unsubscribe device when terminating
 process.on("SIGINT", function() {
-    logger.log('info', "Unsubscribing device...");
-
-    optionsget.path = "/unsubscribe_terminal/" + deviceId;
-    var reqGet = https.request(optionsget, function(res) {
-        logger.log('info', "Done!");
-        process.exit();
-    });
-    reqGet.end();
+    logger.log('info', "Unsubscribing devices...");
+    for (var deviceId in config.devices) {
+        logger.log('info', 'Unsubscribing: ' + config.devices[deviceId]);
+        unsubscribeDevice(config.devices[deviceId], token);
+    }
 });

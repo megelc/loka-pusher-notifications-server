@@ -8,7 +8,8 @@ Specific events will trigger a Pusher Beams (https://pusher.com/beams) push noti
 The server is implemented using NodeJS.
 
 ## Running
+> Modify the "config.json" file to include the Loka Device Id's to subscribe to (It's a JSON array)
 
 > docker build -t loka-pusher-notifications-server .
 
-> docker run -e LOKA_AUTH_TOKEN="\<INSERT\>" -e LOKA_DEVICE_ID="\<INSERT\>" -e PUSHER_INSTANCE_ID="\<INSERT\>" -e PUSHER_SECRET_KEY="\<INSERT\>" loka-pusher-notifications-server
+> docker run -e LOKA_AUTH_TOKEN="\<INSERT\>" -e PUSHER_INSTANCE_ID="\<INSERT\>" -e PUSHER_SECRET_KEY="\<INSERT\>" loka-pusher-notifications-server
